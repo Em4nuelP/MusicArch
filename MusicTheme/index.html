@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Air Glass Player</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="bg">
+    <div class="blob b1"></div>
+    <div class="blob b2"></div>
+    <div class="noise"></div>
+  </div>
+
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="dot"></div>
+        <span>Air Glass Player</span>
+      </div>
+
+      <div class="toolbar">
+        <label class="chip">
+          <span>Cor</span>
+          <input id="colorPicker" type="color" value="#66e6b3" />
+        </label>
+
+        <label class="chip">
+          <span>Wave</span>
+          <select id="vizSelect" aria-label="Modo do visualizer">
+            <option value="bars" selected>Barras</option>
+            <option value="line">Linha</option>
+          </select>
+        </label>
+
+        <button class="btn" id="selectFolder">Escolher pasta</button>
+        <input type="file" id="folder" webkitdirectory multiple accept="audio/*" />
+      </div>
+    </header>
+
+    <section class="layout">
+      <!-- LEFT -->
+      <section class="panel left">
+        <div class="coverWrap">
+          <img id="coverImg" alt="Capa do álbum" />
+          <div class="coverGlow"></div>
+        </div>
+
+        <div class="meta">
+          <h2 id="musicName">Selecione uma pasta</h2>
+          <p id="musicArtist">—</p>
+        </div>
+
+        <div class="timeRow">
+          <span id="tCur">0:00</span>
+          <span id="tDur">0:00</span>
+        </div>
+
+        <!-- (progress agora fica na CENTER, abaixo do visualizer) -->
+      </section>
+
+      <!-- CENTER -->
+      <section class="panel center">
+        <div class="vizHeader">
+          <span class="hint">Visualizer</span>
+          <span class="hint" id="vizMode">Barras</span>
+        </div>
+
+        <canvas id="visualizer" title="Clique para alternar Bars/Line"></canvas>
+
+        <!-- PROGRESSO ABAIXO DO VISUALIZER -->
+        <input id="progress" class="range" type="range" value="0" min="0" max="100" />
+
+        <!-- CONTROLES + VOLUME -->
+        <div class="controlRow">
+          <div class="controls">
+            <button class="icon" id="prev" title="Anterior (←)">⏮</button>
+            <button class="play" id="play" title="Play/Pause (Espaço)">▶</button>
+            <button class="icon" id="next" title="Próxima (→)">⏭</button>
+          </div>
+
+          <div class="volume">
+            <button class="icon small" id="mute" title="Mute (M)">🔈</button>
+            <input id="volume" class="range vol" type="range" min="0" max="100" value="85" />
+          </div>
+        </div>
+
+        <div class="subhint" id="status">Pronto.</div>
+        <div class="subhint subtle">Atalhos: Espaço play/pause • ←/→ troca • M mute</div>
+      </section>
+
+      <!-- RIGHT -->
+      <aside class="panel right">
+        <div class="plistHead">
+          <span>Playlist</span>
+          <span class="count" id="count">0</span>
+        </div>
+        <div class="playlist" id="playlist"></div>
+      </aside>
+    </section>
+
+    <audio id="audio"></audio>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

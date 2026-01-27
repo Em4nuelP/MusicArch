@@ -3,6 +3,11 @@
  ****************************************************/
 let files = [];
 let idx = 0;
+let tracks = [];
+
+let viewMode = "all"; // all | artists | albums | artistTracks | albumTracks
+let viewFilter = null;
+let searchQuery = "";
 
 let accent = getComputedStyle(document.documentElement)
   .getPropertyValue("--accent")
@@ -26,6 +31,11 @@ const playBtn = document.getElementById("play");
 const statusEl = document.getElementById("status");
 const tCur = document.getElementById("tCur");
 const tDur = document.getElementById("tDur");
+const navButtons = Array.from(document.querySelectorAll(".plistNav .seg"));
+const plistSub = document.getElementById("plistSub");
+const backToList = document.getElementById("backToList");
+const subTitle = document.getElementById("subTitle");
+const searchInput = document.getElementById("searchInput");
 
 const colorPicker = document.getElementById("colorPicker");
 const vizSelect = document.getElementById("vizSelect");
@@ -89,6 +99,40 @@ function hexToRgba(hex, a) {
   const g = (n >> 8) & 255;
   const b = n & 255;
   return `rgba(${r},${g},${b},${a})`;
+}
+
+function baseTitleFromFile(file) {
+  return file.name.replace(/\.[^/.]+$/, "");
+}
+
+function readTags(file) {
+  return new Promise((resolve) => {
+    if (!window.jsmediatags) {
+      resolve({ title: "", artist: "", album: "" });
+      return;
+    }
+    window.jsmediatags.read(file, {
+      onSuccess: (tag) => {
+        const t = tag.tags || {};
+        resolve({
+          title: t.title || t.TIT2 || "",
+          artist: t.artist || t.TPE1 || "",
+          album: t.album || t.TALB || ""
+        });
+      },
+      onError: () => resolve({ title: "", artist: "", album: "" })
+    });
+  });
+}
+
+function normalizeText(s) {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 
@@ -201,23 +245,139 @@ updateMuteIcon();
 /****************************************************
  * BLOCO 8 — PLAYLIST UI
  ****************************************************/
+function setView(mode, filter = null) {
+  viewMode = mode;
+  viewFilter = filter;
+
+  navButtons.forEach((btn) => {
+    const target = btn.dataset.view;
+    const active = (mode === "all" && target === "all")
+      || (mode.startsWith("artist") && target === "artists")
+      || (mode.startsWith("album") && target === "albums");
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-selected", active ? "true" : "false");
+  });
+
+  if (mode === "artistTracks") backToList.onclick = () => setView("artists");
+  if (mode === "albumTracks") backToList.onclick = () => setView("albums");
+
+  const inSub = mode === "artistTracks" || mode === "albumTracks";
+  backToList.disabled = !inSub;
+  backToList.setAttribute("aria-disabled", inSub ? "false" : "true");
+
+  renderPlaylist();
+}
+
+navButtons.forEach((btn) => {
+  btn.onclick = () => setView(btn.dataset.view);
+});
+
+searchInput.oninput = () => {
+  searchQuery = normalizeText(searchInput.value);
+  renderPlaylist();
+};
+
 function renderPlaylist() {
   playlist.innerHTML = "";
-  countEl.textContent = String(files.length);
 
-  files.forEach((f, i) => {
-    const div = document.createElement("div");
-    div.className = "track";
-    div.innerHTML = `<span>${escapeHtml(f.name)}</span><span class="sub">Local</span>`;
-    div.onclick = () => { idx = i; playIndex(true); };
-    playlist.appendChild(div);
-  });
+  const q = searchQuery;
+  const matchesTrack = (t) => {
+    if (!q) return true;
+    const fileName = t.file ? t.file.name : "";
+    const fileBase = fileName.replace(/\.[^/.]+$/, "");
+    return (
+      normalizeText(t.title).includes(q) ||
+      normalizeText(t.artist).includes(q) ||
+      normalizeText(t.album).includes(q) ||
+      normalizeText(fileName).includes(q) ||
+      normalizeText(fileBase).includes(q)
+    );
+  };
+
+  const filteredTracks = tracks.filter(matchesTrack);
+
+  const byArtist = () => {
+    const map = new Map();
+    filteredTracks.forEach((t) => {
+      const key = t.artist || "Desconhecido";
+      map.set(key, (map.get(key) || 0) + 1);
+    });
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  };
+
+  const byAlbum = () => {
+    const map = new Map();
+    filteredTracks.forEach((t) => {
+      const key = t.album || "Desconhecido";
+      map.set(key, (map.get(key) || 0) + 1);
+    });
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  };
+
+  const renderTracks = (list) => {
+    list.forEach((t) => {
+      const div = document.createElement("div");
+      div.className = "track";
+      div.dataset.index = String(t.index);
+      div.innerHTML = `<span>${escapeHtml(t.title)}</span><span class="sub">${escapeHtml(t.artist || "Desconhecido")} - ${escapeHtml(t.album || "Desconhecido")}</span>`;
+      div.onclick = () => { idx = t.index; playIndex(true); };
+      playlist.appendChild(div);
+    });
+  };
+
+  const setCount = (n) => { countEl.textContent = String(n); };
+
+  plistSub.hidden = true;
+  subTitle.textContent = "";
+
+  if (viewMode === "all") {
+    setCount(filteredTracks.length);
+    renderTracks(filteredTracks);
+  } else if (viewMode === "artists") {
+    const items = byArtist();
+    setCount(items.length);
+    items.forEach(([name, total]) => {
+      const div = document.createElement("div");
+      div.className = "track group";
+      div.innerHTML = `<span>${escapeHtml(name)}</span><span class="sub">${total} musica(s)</span>`;
+      div.onclick = () => setView("artistTracks", name);
+      playlist.appendChild(div);
+    });
+  } else if (viewMode === "albums") {
+    const items = byAlbum();
+    setCount(items.length);
+    items.forEach(([name, total]) => {
+      const div = document.createElement("div");
+      div.className = "track group";
+      div.innerHTML = `<span>${escapeHtml(name)}</span><span class="sub">${total} musica(s)</span>`;
+      div.onclick = () => setView("albumTracks", name);
+      playlist.appendChild(div);
+    });
+  } else if (viewMode === "artistTracks") {
+    plistSub.hidden = false;
+    subTitle.textContent = `Artista: ${viewFilter || "Desconhecido"}`;
+    const list = filteredTracks.filter(t => (t.artist || "Desconhecido") === viewFilter);
+    setCount(list.length);
+    renderTracks(list);
+  } else if (viewMode === "albumTracks") {
+    plistSub.hidden = false;
+    subTitle.textContent = `Album: ${viewFilter || "Desconhecido"}`;
+    const list = filteredTracks.filter(t => (t.album || "Desconhecido") === viewFilter);
+    setCount(list.length);
+    renderTracks(list);
+  }
+
   updateActive();
 }
 
 function updateActive() {
-  document.querySelectorAll(".track").forEach((el, i) => {
-    el.classList.toggle("active", i === idx);
+  document.querySelectorAll(".track").forEach((el) => {
+    const dataIndex = Number(el.dataset.index);
+    if (Number.isNaN(dataIndex)) {
+      el.classList.remove("active");
+      return;
+    }
+    el.classList.toggle("active", dataIndex === idx);
   });
 }
 
@@ -243,7 +403,8 @@ function playIndex(userGesture = false) {
   const f = files[idx];
   setAudioSrcFromFile(f);
 
-  musicName.textContent = f.name;
+  const t = tracks[idx];
+  musicName.textContent = (t && t.title) ? t.title : f.name;
   statusEl.textContent = "Carregando…";
   loadTagsAndCover(f);
 
@@ -292,13 +453,32 @@ document.getElementById("prev").onclick = () => {
 folder.onchange = (e) => {
   files = Array.from(e.target.files).filter(f => f.type.startsWith("audio/"));
   idx = 0;
-  renderPlaylist();
-  statusEl.textContent = files.length ? "Pronto para tocar." : "Nenhum áudio encontrado.";
+  tracks = files.map((f, i) => ({
+    file: f,
+    index: i,
+    title: baseTitleFromFile(f),
+    artist: "",
+    album: ""
+  }));
+  setView("all");
+  statusEl.textContent = files.length ? "Carregando metadados..." : "Nenhum áudio encontrado.";
 
   // garante ícone inicial
   updatePlayIcon(false);
 
   if (files.length) playIndex(false);
+
+  if (!files.length) return;
+  Promise.all(tracks.map((t) => readTags(t.file))).then((tags) => {
+    tags.forEach((tag, i) => {
+      if (!tracks[i]) return;
+      tracks[i].title = tag.title || tracks[i].title;
+      tracks[i].artist = tag.artist || "";
+      tracks[i].album = tag.album || "";
+    });
+    renderPlaylist();
+    statusEl.textContent = "Pronto para tocar.";
+  });
 };
 
 audio.onended = () => {

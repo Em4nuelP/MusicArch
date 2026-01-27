@@ -11,6 +11,7 @@
 
 *{ box-sizing: border-box; margin:0; padding:0; font-family: Inter, system-ui, -apple-system, Segoe UI, Arial, sans-serif; }
 body{ height:100vh; background:#0a0c0f; color:var(--txt); overflow:hidden; }
+[hidden]{ display:none !important; }
 
 .bg{ position:fixed; inset:0; }
 .blob{
@@ -278,6 +279,93 @@ input[type="range"]::-moz-range-thumb{
   background: rgba(255,255,255,.06);
   font-size: 11px;
   color: rgba(255,255,255,.65);
+}
+
+.plistNav{
+  display:flex;
+  gap: 6px;
+  padding: 10px 12px 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(0,0,0,.08);
+}
+.seg{
+  appearance: none;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  color: var(--txt);
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.seg.active{
+  background: rgba(255,255,255,.18);
+  border-color: rgba(255,255,255,.22);
+}
+.seg:hover{ background: rgba(255,255,255,.10); }
+
+.plistSearch{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(0,0,0,.06);
+}
+.plistSearch svg{
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.2;
+  color: rgba(255,255,255,.65);
+}
+.plistSearch input{
+  width: 100%;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.10);
+  color: var(--txt);
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 11px;
+  outline: none;
+}
+.plistSearch input::placeholder{
+  color: rgba(255,255,255,.45);
+}
+
+.plistSub{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(0,0,0,.06);
+}
+.back{
+  display:flex;
+  align-items:center;
+  gap: 6px;
+  appearance: none;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  color: var(--txt);
+  font-size: 11px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.back:hover{ background: rgba(255,255,255,.10); }
+.back svg{
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.2;
+}
+.subTitle{
+  font-size: 11px;
+  color: rgba(255,255,255,.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .playlist{

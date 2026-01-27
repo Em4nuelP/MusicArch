@@ -1,9 +1,19 @@
+/****************************************************
+ * BLOCO 1 — STATE (estado global)
+ ****************************************************/
 let files = [];
 let idx = 0;
 
-let accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#66e6b3";
+let accent = getComputedStyle(document.documentElement)
+  .getPropertyValue("--accent")
+  .trim() || "#ffffff";
+
 let vizMode = "bars"; // "bars" | "line"
 
+
+/****************************************************
+ * BLOCO 2 — DOM (cache de elementos)
+ ****************************************************/
 const audio = document.getElementById("audio");
 const folder = document.getElementById("folder");
 const playlist = document.getElementById("playlist");
@@ -26,66 +36,54 @@ const muteBtn = document.getElementById("mute");
 
 document.getElementById("selectFolder").onclick = () => folder.click();
 
-/* ====== Accent color ====== */
-colorPicker.value = accent;
-colorPicker.oninput = (e) => {
-  accent = e.target.value;
-  document.documentElement.style.setProperty("--accent", accent);
-  // atualiza fallback (fica bem coerente)
-  if (!coverImg.dataset.blobUrl) setFallbackCover();
-};
 
-/* ====== Viz mode ====== */
-vizSelect.onchange = (e) => {
-  vizMode = e.target.value;
-  vizModeLabel.textContent = vizMode === "bars" ? "Barras" : "Linha";
-};
-vizModeLabel.textContent = "Barras";
-
-/* Clique no canvas alterna modo (bem útil) */
-document.getElementById("visualizer").addEventListener("click", () => {
-  vizMode = (vizMode === "bars") ? "line" : "bars";
-  vizSelect.value = vizMode;
-  vizModeLabel.textContent = vizMode === "bars" ? "Barras" : "Linha";
-});
-
-/* ====== Volume ====== */
-audio.volume = 0.85;
-volume.value = "85";
-
-volume.oninput = () => {
-  audio.muted = false;
-  const v = Number(volume.value) / 100;
-  audio.volume = v;
-  updateMuteIcon();
-};
-
-muteBtn.onclick = () => {
-  audio.muted = !audio.muted;
-  updateMuteIcon();
-};
-
-function updateMuteIcon(){
-  // simples e limpo
-  if (audio.muted || audio.volume === 0) muteBtn.textContent = "🔇";
-  else if (audio.volume < 0.5) muteBtn.textContent = "🔉";
-  else muteBtn.textContent = "🔈";
+/****************************************************
+ * BLOCO 3 — ICONS (Lucide)
+ ****************************************************/
+function renderIcons() {
+  if (window.lucide) window.lucide.createIcons();
 }
-updateMuteIcon();
+renderIcons();
 
-/* ===== Helpers ===== */
+function setButtonIcon(buttonEl, iconName) {
+  buttonEl.innerHTML = `<i data-lucide="${iconName}"></i>`;
+  renderIcons();
+}
+
+function updatePlayIcon(isPlaying) {
+  // play/pause no botão central
+  playBtn.innerHTML = isPlaying
+    ? `<i data-lucide="pause"></i>`
+    : `<i data-lucide="play"></i>`;
+  renderIcons();
+}
+
+function updateMuteIcon() {
+  if (audio.muted || audio.volume === 0) setButtonIcon(muteBtn, "volume-x");
+  else if (audio.volume < 0.5) setButtonIcon(muteBtn, "volume-1");
+  else setButtonIcon(muteBtn, "volume-2");
+}
+
+
+/****************************************************
+ * BLOCO 4 — HELPERS (utilitários)
+ ****************************************************/
 function fmtTime(s) {
   if (!isFinite(s) || s < 0) return "0:00";
   const m = Math.floor(s / 60);
   const r = Math.floor(s % 60);
   return `${m}:${String(r).padStart(2, "0")}`;
 }
-function escapeHtml(s){
-  return s.replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, (m) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[m])
+  );
 }
-function hexToRgba(hex, a){
-  const h = hex.replace("#","").trim();
-  const full = h.length === 3 ? h.split("").map(ch => ch+ch).join("") : h;
+
+function hexToRgba(hex, a) {
+  const h = hex.replace("#", "").trim();
+  const full = h.length === 3 ? h.split("").map(ch => ch + ch).join("") : h;
   const n = parseInt(full, 16);
   const r = (n >> 16) & 255;
   const g = (n >> 8) & 255;
@@ -93,7 +91,10 @@ function hexToRgba(hex, a){
   return `rgba(${r},${g},${b},${a})`;
 }
 
-/* ===== Fallback cover (Air-like) ===== */
+
+/****************************************************
+ * BLOCO 5 — COVER FALLBACK + ID3 TAGS
+ ****************************************************/
 function setFallbackCover() {
   const svg = `
   <svg xmlns="http://www.w3.org/2000/svg" width="600" height="600">
@@ -117,9 +118,8 @@ function setFallbackCover() {
   delete coverImg.dataset.blobUrl;
 }
 
-/* ===== ID3: capa + artista/álbum ===== */
 function loadTagsAndCover(file) {
-  // limpa blob anterior
+  // limpa blob anterior da capa
   if (coverImg.dataset.blobUrl) {
     URL.revokeObjectURL(coverImg.dataset.blobUrl);
     delete coverImg.dataset.blobUrl;
@@ -154,7 +154,53 @@ function loadTagsAndCover(file) {
   });
 }
 
-/* ===== Playlist ===== */
+
+/****************************************************
+ * BLOCO 6 — ACCENT + VIZ MODE
+ ****************************************************/
+colorPicker.value = accent;
+colorPicker.oninput = (e) => {
+  accent = e.target.value;
+  document.documentElement.style.setProperty("--accent", accent);
+  if (!coverImg.dataset.blobUrl) setFallbackCover();
+};
+
+vizSelect.onchange = (e) => {
+  vizMode = e.target.value;
+  vizModeLabel.textContent = vizMode === "bars" ? "Barras" : "Linha";
+};
+vizModeLabel.textContent = "Barras";
+
+document.getElementById("visualizer").addEventListener("click", () => {
+  vizMode = (vizMode === "bars") ? "line" : "bars";
+  vizSelect.value = vizMode;
+  vizModeLabel.textContent = vizMode === "bars" ? "Barras" : "Linha";
+});
+
+
+/****************************************************
+ * BLOCO 7 — VOLUME + MUTE
+ ****************************************************/
+audio.volume = 0.85;
+volume.value = "85";
+audio.muted = false;
+
+volume.oninput = () => {
+  audio.muted = false;
+  audio.volume = Number(volume.value) / 100;
+  updateMuteIcon();
+};
+
+muteBtn.onclick = () => {
+  audio.muted = !audio.muted;
+  updateMuteIcon();
+};
+updateMuteIcon();
+
+
+/****************************************************
+ * BLOCO 8 — PLAYLIST UI
+ ****************************************************/
 function renderPlaylist() {
   playlist.innerHTML = "";
   countEl.textContent = String(files.length);
@@ -168,34 +214,47 @@ function renderPlaylist() {
   });
   updateActive();
 }
+
 function updateActive() {
   document.querySelectorAll(".track").forEach((el, i) => {
     el.classList.toggle("active", i === idx);
   });
 }
 
-/* ===== Audio play logic ===== */
+
+/****************************************************
+ * BLOCO 9 — AUDIO URL (evita vazamento de objectURL)
+ ****************************************************/
+let lastAudioUrl = null;
+
+function setAudioSrcFromFile(file) {
+  if (lastAudioUrl) URL.revokeObjectURL(lastAudioUrl);
+  lastAudioUrl = URL.createObjectURL(file);
+  audio.src = lastAudioUrl;
+}
+
+
+/****************************************************
+ * BLOCO 10 — PLAYER (play/pause/next/prev)
+ ****************************************************/
 function playIndex(userGesture = false) {
   if (!files.length) return;
 
   const f = files[idx];
-  audio.src = URL.createObjectURL(f);
+  setAudioSrcFromFile(f);
 
-  // nome inicial (antes do ID3)
   musicName.textContent = f.name;
   statusEl.textContent = "Carregando…";
-
   loadTagsAndCover(f);
 
   if (userGesture) resumeAudioCtx();
 
   audio.play().then(() => {
-    playBtn.textContent = "⏸";
+    updatePlayIcon(true);
     statusEl.textContent = "Reproduzindo";
     updateActive();
   }).catch(() => {
-    // caso o navegador bloqueie autoplay em algumas situações
-    playBtn.textContent = "▶";
+    updatePlayIcon(false);
     statusEl.textContent = "Clique em ▶ para iniciar (política do navegador).";
   });
 }
@@ -206,14 +265,14 @@ playBtn.onclick = () => {
 
   if (audio.paused) {
     audio.play().then(() => {
-      playBtn.textContent = "⏸";
+      updatePlayIcon(true);
       statusEl.textContent = "Reproduzindo";
     }).catch(() => {
       statusEl.textContent = "Sem permissão para autoplay.";
     });
   } else {
     audio.pause();
-    playBtn.textContent = "▶";
+    updatePlayIcon(false);
     statusEl.textContent = "Pausado";
   }
 };
@@ -235,6 +294,10 @@ folder.onchange = (e) => {
   idx = 0;
   renderPlaylist();
   statusEl.textContent = files.length ? "Pronto para tocar." : "Nenhum áudio encontrado.";
+
+  // garante ícone inicial
+  updatePlayIcon(false);
+
   if (files.length) playIndex(false);
 };
 
@@ -244,6 +307,10 @@ audio.onended = () => {
   playIndex(true);
 };
 
+
+/****************************************************
+ * BLOCO 11 — PROGRESS + TEMPOS (AGORA EM CIMA)
+ ****************************************************/
 audio.onloadedmetadata = () => {
   tDur.textContent = fmtTime(audio.duration);
 };
@@ -258,9 +325,11 @@ progress.oninput = () => {
   audio.currentTime = (progress.value / 100) * audio.duration;
 };
 
-/* ===== Keyboard shortcuts ===== */
+
+/****************************************************
+ * BLOCO 12 — KEYBOARD SHORTCUTS
+ ****************************************************/
 window.addEventListener("keydown", (e) => {
-  // evita interferir quando estiver mexendo em input
   const tag = (document.activeElement?.tagName || "").toLowerCase();
   if (tag === "input" || tag === "select" || tag === "textarea") return;
 
@@ -276,7 +345,10 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-/* ===== Visualizer ===== */
+
+/****************************************************
+ * BLOCO 13 — VISUALIZER (canvas + analyser)
+ ****************************************************/
 const canvas = document.getElementById("visualizer");
 const ctx = canvas.getContext("2d");
 
@@ -294,7 +366,7 @@ function initAudioGraph() {
   if (audioCtx) return;
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 1024; // melhor p/ linha suave
+  analyser.fftSize = 1024;
   srcNode = audioCtx.createMediaElementSource(audio);
   srcNode.connect(analyser);
   analyser.connect(audioCtx.destination);
@@ -302,12 +374,12 @@ function initAudioGraph() {
   freqData = new Uint8Array(analyser.frequencyBinCount);
   timeData = new Uint8Array(analyser.fftSize);
 }
-function resumeAudioCtx(){
+function resumeAudioCtx() {
   initAudioGraph();
   if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
 }
 
-function roundRect(c, x, y, w, h, r){
+function roundRect(c, x, y, w, h, r) {
   c.beginPath();
   c.moveTo(x + r, y);
   c.arcTo(x + w, y, x + w, y + h, r);
@@ -317,16 +389,14 @@ function roundRect(c, x, y, w, h, r){
   c.closePath();
 }
 
-function drawIdle(W, H){
+function drawIdle(W, H) {
   ctx.globalAlpha = 0.35;
   ctx.strokeStyle = "rgba(255,255,255,0.20)";
   ctx.lineWidth = 1;
-
   ctx.beginPath();
   ctx.moveTo(18, H / 2);
   ctx.lineTo(W - 18, H / 2);
   ctx.stroke();
-
   ctx.globalAlpha = 1;
 }
 
@@ -334,23 +404,32 @@ function drawBars(W, H){
   analyser.getByteFrequencyData(freqData);
 
   const bars = 60;
-  const step = Math.floor(freqData.length / bars);
+
+  // usa só até 70% do espectro (mais musical)
+  const usableBins = Math.floor(freqData.length * 0.7);
+  const step = Math.max(1, Math.floor(usableBins / bars));
+
   const gap = 6;
   const barW = Math.max(2, (W - (bars + 1) * gap) / bars);
 
   ctx.save();
   ctx.shadowColor = accent;
-  ctx.shadowBlur = 14;
+  ctx.shadowBlur = 16;
 
   for (let i = 0; i < bars; i++) {
-    const v = freqData[i * step] / 255;
-    const h = Math.max(3, v * (H * 0.82));
+    const index = i * step;
+    const v = freqData[index] / 255;
+
+    // ganho leve para as últimas barras
+    const gain = 0.6 + i / bars;
+    const h = Math.max(4, v * gain * (H * 0.82));
+
     const x = gap + i * (barW + gap);
     const y = H - h - 12;
 
     const g = ctx.createLinearGradient(0, y, 0, y + h);
     g.addColorStop(0, hexToRgba(accent, 0.95));
-    g.addColorStop(1, "rgba(255,255,255,0.12)");
+    g.addColorStop(1, "rgba(255,255,255,0.10)");
 
     roundRect(ctx, x, y, barW, h, 10);
     ctx.fillStyle = g;
@@ -359,35 +438,55 @@ function drawBars(W, H){
   ctx.restore();
 }
 
+
+// ===== Line visualizer tuning =====
+const LINE_SMOOTHING = 0.18;   // 0.05 (muito calmo) → 0.2 (mais vivo)
+const LINE_AMPLITUDE = 0.15;   // porcentagem da altura do canvas
+
+
+let smoothLine = null;
+
 function drawLine(W, H){
   analyser.getByteTimeDomainData(timeData);
 
-  // linha central com glow sutil
+  if (!smoothLine || smoothLine.length !== timeData.length) {
+    smoothLine = new Float32Array(timeData.length);
+    for (let i = 0; i < timeData.length; i++) {
+      smoothLine[i] = timeData[i];
+    }
+  }
+
   ctx.save();
   ctx.shadowColor = accent;
-  ctx.shadowBlur = 10;
+  ctx.shadowBlur = 8;
 
   ctx.lineWidth = 2;
   ctx.strokeStyle = hexToRgba(accent, 0.85);
 
   const mid = H / 2;
-  const amp = H * 0.33;
+  const amp = H * LINE_AMPLITUDE; // ✅ agora correto
 
   ctx.beginPath();
+
   for (let i = 0; i < timeData.length; i++) {
-    const t = timeData[i] / 128.0 - 1.0; // -1..1
+    smoothLine[i] += (timeData[i] - smoothLine[i]) * LINE_SMOOTHING;
+
+    const t = smoothLine[i] / 128.0 - 1.0;
     const x = (i / (timeData.length - 1)) * (W - 24) + 12;
     const y = mid + t * amp;
+
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   }
+
   ctx.stroke();
 
-  // uma “linha base” bem discreta por baixo (fica bem Air)
+  // linha base discreta
   ctx.shadowBlur = 0;
   ctx.globalAlpha = 0.35;
   ctx.strokeStyle = "rgba(255,255,255,0.18)";
   ctx.lineWidth = 1;
+
   ctx.beginPath();
   ctx.moveTo(12, mid);
   ctx.lineTo(W - 12, mid);
@@ -397,7 +496,8 @@ function drawLine(W, H){
   ctx.globalAlpha = 1;
 }
 
-function drawFrame(W, H){
+
+function drawFrame(W, H) {
   ctx.globalAlpha = 0.35;
   ctx.strokeStyle = "rgba(255,255,255,0.18)";
   ctx.lineWidth = 1;
@@ -412,74 +512,17 @@ function draw() {
   const W = canvas.clientWidth;
   const H = canvas.clientHeight;
 
-    ctx.clearRect(0, 0, W, H);
+  ctx.clearRect(0, 0, W, H);
 
-  // fundo levemente “glass”
   ctx.fillStyle = "rgba(0,0,0,0.08)";
   ctx.fillRect(0, 0, W, H);
 
-  // moldura
   drawFrame(W, H);
 
-  // se ainda não iniciou o grafo de áudio, mostra idle
-  if (!analyser) {
-    drawIdle(W, H);
-    return;
-  }
+  if (!analyser) { drawIdle(W, H); return; }
+  if (audio.paused || audio.muted || audio.volume === 0) { drawIdle(W, H); return; }
 
-  // quando estiver pausado, desenha algo bem discreto (idle)
-  if (audio.paused || audio.muted || audio.volume === 0) {
-    drawIdle(W, H);
-    return;
-  }
-
-  // desenha o visualizer
   if (vizMode === "line") drawLine(W, H);
   else drawBars(W, H);
 }
-
-// inicia o loop do canvas
 draw();
-
-/* ===== Melhorias pequenas (opcional) =====
-   - garante que ao trocar de música não acumule objectURL do áudio
-*/
-let lastAudioUrl = null;
-
-function setAudioSrcFromFile(file) {
-  // limpa URL anterior do <audio>
-  if (lastAudioUrl) URL.revokeObjectURL(lastAudioUrl);
-
-  lastAudioUrl = URL.createObjectURL(file);
-  audio.src = lastAudioUrl;
-}
-
-/* Troca no playIndex pra usar o helper acima */
-const _playIndexOriginal = playIndex;
-playIndex = function (userGesture = false) {
-  if (!files.length) return;
-
-  const f = files[idx];
-  setAudioSrcFromFile(f);
-
-  // nome inicial (antes do ID3)
-  musicName.textContent = f.name;
-  statusEl.textContent = "Carregando…";
-
-  loadTagsAndCover(f);
-
-  if (userGesture) resumeAudioCtx();
-
-  audio
-    .play()
-    .then(() => {
-      playBtn.textContent = "⏸";
-      statusEl.textContent = "Reproduzindo";
-      updateActive();
-    })
-    .catch(() => {
-      playBtn.textContent = "▶";
-      statusEl.textContent = "Clique em ▶ para iniciar (política do navegador).";
-    });
-};
-

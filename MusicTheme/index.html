@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Air Glass Player</title>
   <link rel="stylesheet" href="style.css" />
+
+  <!-- LUCIDE (ícones premium) -->
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
   <div class="bg">
@@ -52,12 +55,7 @@
           <p id="musicArtist">—</p>
         </div>
 
-        <div class="timeRow">
-          <span id="tCur">0:00</span>
-          <span id="tDur">0:00</span>
-        </div>
-
-        <!-- (progress agora fica na CENTER, abaixo do visualizer) -->
+        <!-- (REMOVIDO o timeRow daqui) -->
       </section>
 
       <!-- CENTER -->
@@ -69,19 +67,34 @@
 
         <canvas id="visualizer" title="Clique para alternar Bars/Line"></canvas>
 
-        <!-- PROGRESSO ABAIXO DO VISUALIZER -->
+        <!-- TEMPO EM CIMA DO PROGRESSO (premium) -->
+        <div class="progressTime">
+          <span id="tCur">0:00</span>
+          <span id="tDur">0:00</span>
+        </div>
+
         <input id="progress" class="range" type="range" value="0" min="0" max="100" />
 
         <!-- CONTROLES + VOLUME -->
         <div class="controlRow">
           <div class="controls">
-            <button class="icon" id="prev" title="Anterior (←)">⏮</button>
-            <button class="play" id="play" title="Play/Pause (Espaço)">▶</button>
-            <button class="icon" id="next" title="Próxima (→)">⏭</button>
+            <button class="icon" id="prev" title="Anterior (←)" aria-label="Anterior">
+              <i data-lucide="skip-back"></i>
+            </button>
+
+            <button class="play" id="play" title="Play/Pause (Espaço)" aria-label="Play/Pause">
+              <i data-lucide="play"></i>
+            </button>
+
+            <button class="icon" id="next" title="Próxima (→)" aria-label="Próxima">
+              <i data-lucide="skip-forward"></i>
+            </button>
           </div>
 
           <div class="volume">
-            <button class="icon small" id="mute" title="Mute (M)">🔈</button>
+            <button class="icon small" id="mute" title="Mute (M)" aria-label="Mute">
+              <i data-lucide="volume-2"></i>
+            </button>
             <input id="volume" class="range vol" type="range" min="0" max="100" value="85" />
           </div>
         </div>

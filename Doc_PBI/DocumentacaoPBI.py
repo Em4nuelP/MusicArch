@@ -1,3 +1,4 @@
+
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
@@ -197,3 +198,12 @@ with open(PASTA_OUTPUT / nome_arquivo, "w", encoding="utf-8") as f:
 print("✅ DOCUMENTAÇÃO GERADA COM SUCESSO!")
 print(f"📂 Pasta: {PASTA_OUTPUT}")
 print(f"📄 Arquivo: {nome_arquivo}")
+
+
+
+
+
+
+
+
+

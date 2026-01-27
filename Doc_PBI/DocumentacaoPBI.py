@@ -86,7 +86,6 @@ measures = filtrar(measures, [
 ])
 
 relationships = filtrar(relationships, [
-    "ID",
     "FromTable",
     "FromColumn",
     "ToTable",

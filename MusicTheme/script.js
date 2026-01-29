@@ -261,6 +261,92 @@ function readDuration(file) {
   });
 }
 
+function trackRowHtml(t) {
+  const dur = t.duration ? fmtTime(t.duration) : "--:--";
+  const initial = escapeHtml((t.title || "?").trim().charAt(0) || "?");
+  const cover = t.coverUrl
+    ? `<img src="${t.coverUrl}" alt="" loading="lazy" />`
+    : `<span class="coverFallback">${initial}</span>`;
+  return `
+    <span class="cover">${cover}</span>
+    <span class="trackMain">
+      <span class="title">${escapeHtml(t.title)}</span>
+      <span class="sub">${escapeHtml(t.artist || "Desconhecido")}</span>
+    </span>
+    <span class="dur">${dur}</span>
+  `;
+}
+
+function updateTrackRow(index) {
+  const el = playlist.querySelector(`.track[data-index="${index}"]`);
+  const t = tracks[index];
+  if (!el || !t) return;
+  el.innerHTML = trackRowHtml(t);
+}
+
+let metaQueue = [];
+let metaQueued = new Set();
+let metaInFlight = 0;
+const META_CONCURRENCY = 2;
+
+function enqueueMeta(index) {
+  if (metaQueued.has(index)) return;
+  metaQueued.add(index);
+  metaQueue.push(index);
+  drainMetaQueue();
+}
+
+function drainMetaQueue() {
+  while (metaInFlight < META_CONCURRENCY && metaQueue.length) {
+    const idx = metaQueue.shift();
+    const t = tracks[idx];
+    if (!t) continue;
+    metaInFlight++;
+    const tagPromise = t.tagsLoaded ? Promise.resolve(null) : readTags(t.file);
+    const durPromise = t.durationLoaded ? Promise.resolve(null) : readDuration(t.file);
+    Promise.all([tagPromise, durPromise]).then(([tag, dur]) => {
+      if (tag) {
+        t.title = tag.title || t.title;
+        t.artist = tag.artist || "";
+        t.album = tag.album || t.album;
+        t.coverUrl = tag.coverUrl || "";
+        t.tagsLoaded = true;
+      }
+      if (typeof dur === "number") {
+        t.duration = dur || 0;
+        t.durationLoaded = true;
+      }
+      updateTrackRow(idx);
+    }).finally(() => {
+      metaInFlight--;
+      metaQueued.delete(idx);
+      if (metaQueue.length) {
+        if ("requestIdleCallback" in window) {
+          window.requestIdleCallback(drainMetaQueue);
+        } else {
+          setTimeout(drainMetaQueue, 0);
+        }
+      }
+    });
+  }
+}
+
+function scheduleVisibleMeta() {
+  if (radioOn) return;
+  const items = playlist.querySelectorAll(".track[data-index]");
+  if (!items.length) return;
+  const sample = items[0].getBoundingClientRect();
+  const itemH = Math.max(1, sample.height);
+  const start = Math.max(0, Math.floor(playlist.scrollTop / itemH) - 4);
+  const visibleCount = Math.ceil(playlist.clientHeight / itemH) + 8;
+  const end = start + visibleCount;
+  for (let i = start; i <= end; i++) {
+    const t = tracks[i];
+    if (!t) continue;
+    if (!t.tagsLoaded || !t.durationLoaded) enqueueMeta(i);
+  }
+}
+
 function normalizeText(s) {
   return String(s || "")
     .toLowerCase()
@@ -349,7 +435,9 @@ async function loadFromHandle(handle) {
     album: getFolderNameFromPath(e.relPath),
     relPath: e.relPath,
     coverUrl: "",
-    duration: 0
+    duration: 0,
+    tagsLoaded: false,
+    durationLoaded: false
   }));
 
   setView("all");
@@ -358,24 +446,9 @@ async function loadFromHandle(handle) {
   if (files.length) playIndex(false);
 
   if (!files.length) return;
-  Promise.all(tracks.map((t) => readTags(t.file))).then((tags) => {
-    tags.forEach((tag, i) => {
-      if (!tracks[i]) return;
-      tracks[i].title = tag.title || tracks[i].title;
-      tracks[i].artist = tag.artist || "";
-      tracks[i].album = tag.album || tracks[i].album;
-      tracks[i].coverUrl = tag.coverUrl || "";
-    });
-    renderPlaylist();
-    statusEl.textContent = "Pronto para tocar.";
-  });
-  Promise.all(tracks.map((t) => readDuration(t.file))).then((durs) => {
-    durs.forEach((dur, i) => {
-      if (!tracks[i]) return;
-      tracks[i].duration = dur || 0;
-    });
-    renderPlaylist();
-  });
+  renderPlaylist();
+  statusEl.textContent = files.length ? "Pronto para tocar." : "Nenhum áudio encontrado.";
+  scheduleVisibleMeta();
 }
 
 
@@ -526,6 +599,15 @@ searchInput.oninput = () => {
   renderPlaylist();
 };
 
+playlist.addEventListener("scroll", () => {
+  if (radioOn) return;
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(scheduleVisibleMeta);
+  } else {
+    setTimeout(scheduleVisibleMeta, 0);
+  }
+});
+
 function renderPlaylist() {
   playlist.innerHTML = "";
 
@@ -606,16 +688,24 @@ function renderPlaylist() {
   if (viewMode === "all") {
     if (!radioOn) setCount(filteredTracks.length);
     renderTracks(filteredTracks);
+    scheduleVisibleMeta();
   } else if (viewMode === "artists") {
     const items = byArtist();
     if (!radioOn) setCount(items.length);
     renderGroups(items);
+    if (items.length && !radioOn) {
+      // carrega tags em background para melhorar a lista de artistas
+      for (let i = 0; i < tracks.length; i++) {
+        if (!tracks[i].tagsLoaded) enqueueMeta(i);
+      }
+    }
   } else if (viewMode === "artistTracks") {
     plistSub.hidden = false;
     subTitle.textContent = `Artista: ${viewFilter || "Desconhecido"}`;
     const list = trackListForMode();
     if (!radioOn) setCount(list.length);
     renderTracks(list);
+    scheduleVisibleMeta();
   }
 
   updateActive();
@@ -743,7 +833,9 @@ folder.onchange = (e) => {
     album: getFolderAlbum(f),
     relPath: getRelPath(f),
     coverUrl: "",
-    duration: 0
+    duration: 0,
+    tagsLoaded: false,
+    durationLoaded: false
   }));
   setView("all");
   statusEl.textContent = files.length ? "Carregando metadados..." : "Nenhum áudio encontrado.";
@@ -754,24 +846,9 @@ folder.onchange = (e) => {
   if (files.length) playIndex(false);
 
   if (!files.length) return;
-  Promise.all(tracks.map((t) => readTags(t.file))).then((tags) => {
-    tags.forEach((tag, i) => {
-      if (!tracks[i]) return;
-      tracks[i].title = tag.title || tracks[i].title;
-      tracks[i].artist = tag.artist || "";
-      tracks[i].album = tag.album || tracks[i].album;
-      tracks[i].coverUrl = tag.coverUrl || "";
-    });
-    renderPlaylist();
-    statusEl.textContent = "Pronto para tocar.";
-  });
-  Promise.all(tracks.map((t) => readDuration(t.file))).then((durs) => {
-    durs.forEach((dur, i) => {
-      if (!tracks[i]) return;
-      tracks[i].duration = dur || 0;
-    });
-    renderPlaylist();
-  });
+  renderPlaylist();
+  statusEl.textContent = files.length ? "Pronto para tocar." : "Nenhum áudio encontrado.";
+  scheduleVisibleMeta();
 };
 
 audio.onended = () => {
@@ -892,7 +969,7 @@ function drawBars(W, H){
 
   ctx.save();
   ctx.shadowColor = accent;
-  ctx.shadowBlur = 16;
+  ctx.shadowBlur = 18;
 
   for (let i = 0; i < bars; i++) {
     const index = i * step;
@@ -900,16 +977,17 @@ function drawBars(W, H){
 
     // ganho leve para as últimas barras
     const gain = 0.6 + i / bars;
-    const h = Math.max(4, v * gain * (H * 0.82));
+    const h = Math.max(6, v * gain * (H * 0.78));
 
     const x = gap + i * (barW + gap);
     const y = H - h - 12;
 
     const g = ctx.createLinearGradient(0, y, 0, y + h);
     g.addColorStop(0, hexToRgba(accent, 0.95));
-    g.addColorStop(1, "rgba(255,255,255,0.10)");
+    g.addColorStop(0.7, "rgba(255,255,255,0.18)");
+    g.addColorStop(1, "rgba(0,0,0,0.06)");
 
-    roundRect(ctx, x, y, barW, h, 10);
+    roundRect(ctx, x, y, barW, h, 12);
     ctx.fillStyle = g;
     ctx.fill();
   }
@@ -918,8 +996,8 @@ function drawBars(W, H){
 
 
 // ===== Line visualizer tuning =====
-const LINE_SMOOTHING = 0.18;   // 0.05 (muito calmo) → 0.2 (mais vivo)
-const LINE_AMPLITUDE = 0.15;   // porcentagem da altura do canvas
+const LINE_SMOOTHING = 0.12;   // mais suave
+const LINE_AMPLITUDE = 0.17;   // um pouco mais alto
 
 
 let smoothLine = null;
@@ -936,13 +1014,13 @@ function drawLine(W, H){
 
   ctx.save();
   ctx.shadowColor = accent;
-  ctx.shadowBlur = 8;
+  ctx.shadowBlur = 10;
 
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = hexToRgba(accent, 0.85);
+  ctx.lineWidth = 2.4;
+  ctx.strokeStyle = hexToRgba(accent, 0.80);
 
   const mid = H / 2;
-  const amp = H * LINE_AMPLITUDE; // ✅ agora correto
+  const amp = H * LINE_AMPLITUDE;
 
   ctx.beginPath();
 
@@ -976,8 +1054,11 @@ function drawLine(W, H){
 
 
 function drawFrame(W, H) {
-  ctx.globalAlpha = 0.35;
-  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  ctx.globalAlpha = 0.65;
+  const frame = ctx.createLinearGradient(0, 0, 0, H);
+  frame.addColorStop(0, "rgba(255,255,255,0.16)");
+  frame.addColorStop(1, "rgba(255,255,255,0.06)");
+  ctx.strokeStyle = frame;
   ctx.lineWidth = 1;
   roundRect(ctx, 10, 10, W - 20, H - 20, 16);
   ctx.stroke();
@@ -992,7 +1073,10 @@ function draw() {
 
   ctx.clearRect(0, 0, W, H);
 
-  ctx.fillStyle = "rgba(0,0,0,0.08)";
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, "rgba(0,0,0,0.18)");
+  bg.addColorStop(1, "rgba(0,0,0,0.08)");
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
 
   drawFrame(W, H);

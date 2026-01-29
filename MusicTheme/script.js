@@ -107,8 +107,10 @@ function setRadioMode(on) {
     radioFrame.src = "";
     activeRadioId = "";
     statusEl.textContent = "Pronto.";
+    renderPlaylist();
   } else {
     statusEl.textContent = "Escolha uma r?dio.";
+    countEl.textContent = "—";
   }
   if (on && !audio.paused) {
     audio.pause();
@@ -207,20 +209,55 @@ function getFolderNameFromPath(relPath) {
 function readTags(file) {
   return new Promise((resolve) => {
     if (!window.jsmediatags) {
-      resolve({ title: "", artist: "", album: "" });
+      resolve({ title: "", artist: "", album: "", coverUrl: "" });
       return;
     }
     window.jsmediatags.read(file, {
       onSuccess: (tag) => {
         const t = tag.tags || {};
-        resolve({
-          title: t.title || t.TIT2 || "",
-          artist: t.artist || t.TPE1 || "",
-          album: t.album || t.TALB || ""
+        const title = t.title || t.TIT2 || "";
+        const artist = t.artist || t.TPE1 || "";
+        const album = t.album || t.TALB || "";
+        const pic = t.picture;
+        if (!pic) {
+          resolve({ title, artist, album, coverUrl: "" });
+          return;
+        }
+        const bytes = new Uint8Array(pic.data);
+        const blob = new Blob([bytes], { type: pic.format || "image/jpeg" });
+        const reader = new FileReader();
+        reader.onload = () => resolve({
+          title, artist, album, coverUrl: reader.result || ""
         });
+        reader.onerror = () => resolve({ title, artist, album, coverUrl: "" });
+        reader.readAsDataURL(blob);
       },
-      onError: () => resolve({ title: "", artist: "", album: "" })
+      onError: () => resolve({ title: "", artist: "", album: "", coverUrl: "" })
     });
+  });
+}
+
+function readDuration(file) {
+  return new Promise((resolve) => {
+    const temp = new Audio();
+    let url = "";
+    try {
+      url = URL.createObjectURL(file);
+      temp.preload = "metadata";
+      temp.src = url;
+      temp.onloadedmetadata = () => {
+        const dur = isFinite(temp.duration) ? temp.duration : 0;
+        URL.revokeObjectURL(url);
+        resolve(dur);
+      };
+      temp.onerror = () => {
+        if (url) URL.revokeObjectURL(url);
+        resolve(0);
+      };
+    } catch {
+      if (url) URL.revokeObjectURL(url);
+      resolve(0);
+    }
   });
 }
 
@@ -310,7 +347,9 @@ async function loadFromHandle(handle) {
     title: baseTitleFromFile(e.file),
     artist: "",
     album: getFolderNameFromPath(e.relPath),
-    relPath: e.relPath
+    relPath: e.relPath,
+    coverUrl: "",
+    duration: 0
   }));
 
   setView("all");
@@ -325,9 +364,17 @@ async function loadFromHandle(handle) {
       tracks[i].title = tag.title || tracks[i].title;
       tracks[i].artist = tag.artist || "";
       tracks[i].album = tag.album || tracks[i].album;
+      tracks[i].coverUrl = tag.coverUrl || "";
     });
     renderPlaylist();
     statusEl.textContent = "Pronto para tocar.";
+  });
+  Promise.all(tracks.map((t) => readDuration(t.file))).then((durs) => {
+    durs.forEach((dur, i) => {
+      if (!tracks[i]) return;
+      tracks[i].duration = dur || 0;
+    });
+    renderPlaylist();
   });
 }
 
@@ -518,8 +565,35 @@ function renderPlaylist() {
       const div = document.createElement("div");
       div.className = "track";
       div.dataset.index = String(t.index);
-      div.innerHTML = `<span>${escapeHtml(t.title)}</span><span class="sub">${escapeHtml(t.artist || "Desconhecido")}</span>`;
+      const dur = t.duration ? fmtTime(t.duration) : "--:--";
+      const initial = escapeHtml((t.title || "?").trim().charAt(0) || "?");
+      const cover = t.coverUrl
+        ? `<img src="${t.coverUrl}" alt="" loading="lazy" />`
+        : `<span class="coverFallback">${initial}</span>`;
+      div.innerHTML = `
+        <span class="cover">${cover}</span>
+        <span class="trackMain">
+          <span class="title">${escapeHtml(t.title)}</span>
+          <span class="sub">${escapeHtml(t.artist || "Desconhecido")}</span>
+        </span>
+        <span class="dur">${dur}</span>
+      `;
       div.onclick = () => { idx = t.index; playIndex(true); };
+      playlist.appendChild(div);
+    });
+  };
+
+  const renderGroups = (items) => {
+    items.forEach(([name, total]) => {
+      const div = document.createElement("div");
+      div.className = "track group";
+      div.innerHTML = `
+        <span class="trackMain">
+          <span class="title">${escapeHtml(name)}</span>
+          <span class="sub">${total} musica(s)</span>
+        </span>
+      `;
+      div.onclick = () => setView("artistTracks", name);
       playlist.appendChild(div);
     });
   };
@@ -530,23 +604,17 @@ function renderPlaylist() {
   subTitle.textContent = "";
 
   if (viewMode === "all") {
-    setCount(filteredTracks.length);
+    if (!radioOn) setCount(filteredTracks.length);
     renderTracks(filteredTracks);
   } else if (viewMode === "artists") {
     const items = byArtist();
-    setCount(items.length);
-    items.forEach(([name, total]) => {
-      const div = document.createElement("div");
-      div.className = "track group";
-      div.innerHTML = `<span>${escapeHtml(name)}</span><span class="sub">${total} musica(s)</span>`;
-      div.onclick = () => setView("artistTracks", name);
-      playlist.appendChild(div);
-    });
+    if (!radioOn) setCount(items.length);
+    renderGroups(items);
   } else if (viewMode === "artistTracks") {
     plistSub.hidden = false;
     subTitle.textContent = `Artista: ${viewFilter || "Desconhecido"}`;
     const list = trackListForMode();
-    setCount(list.length);
+    if (!radioOn) setCount(list.length);
     renderTracks(list);
   }
 
@@ -673,7 +741,9 @@ folder.onchange = (e) => {
     title: baseTitleFromFile(f),
     artist: "",
     album: getFolderAlbum(f),
-    relPath: getRelPath(f)
+    relPath: getRelPath(f),
+    coverUrl: "",
+    duration: 0
   }));
   setView("all");
   statusEl.textContent = files.length ? "Carregando metadados..." : "Nenhum áudio encontrado.";
@@ -690,9 +760,17 @@ folder.onchange = (e) => {
       tracks[i].title = tag.title || tracks[i].title;
       tracks[i].artist = tag.artist || "";
       tracks[i].album = tag.album || tracks[i].album;
+      tracks[i].coverUrl = tag.coverUrl || "";
     });
     renderPlaylist();
     statusEl.textContent = "Pronto para tocar.";
+  });
+  Promise.all(tracks.map((t) => readDuration(t.file))).then((durs) => {
+    durs.forEach((dur, i) => {
+      if (!tracks[i]) return;
+      tracks[i].duration = dur || 0;
+    });
+    renderPlaylist();
   });
 };
 

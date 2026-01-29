@@ -458,11 +458,11 @@ input[type="range"]::-moz-range-thumb{
 }
 
 .playlist{
-  padding: 10px;
+  padding: 14px 12px 14px 12px;
   overflow:auto;
   flex: 1;
   min-height: 0;
-  background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(0,0,0,0));
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(0,0,0,0));
 }
 
 .track{
@@ -474,6 +474,48 @@ input[type="range"]::-moz-range-thumb{
   font-size: 12px;
   line-height: 1.2;
   transition: background .2s ease, border-color .2s ease, transform .2s ease;
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+.track .cover{
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex: 0 0 auto;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.track .cover img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+.track .coverFallback{
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,.75);
+}
+.trackMain{
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  flex: 1;
+}
+.track .title{
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.track .dur{
+  font-size: 11px;
+  color: rgba(255,255,255,.6);
+  margin-left: 8px;
 }
 .track:hover{
   background: rgba(255,255,255,.07);

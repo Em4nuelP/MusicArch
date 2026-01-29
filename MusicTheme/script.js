@@ -5,7 +5,7 @@ let files = [];
 let idx = 0;
 let tracks = [];
 
-let viewMode = "all"; // all | artists | albums | artistTracks | albumTracks
+let viewMode = "all"; // all | artists | artistTracks
 let viewFilter = null;
 let searchQuery = "";
 
@@ -135,6 +135,14 @@ function normalizeText(s) {
     .trim();
 }
 
+function getFolderAlbum(file) {
+  const rel = file.webkitRelativePath || "";
+  if (!rel) return "";
+  const parts = rel.split("/").filter(Boolean);
+  if (parts.length < 2) return "";
+  return parts[parts.length - 2];
+}
+
 
 /****************************************************
  * BLOCO 5 — COVER FALLBACK + ID3 TAGS
@@ -252,16 +260,14 @@ function setView(mode, filter = null) {
   navButtons.forEach((btn) => {
     const target = btn.dataset.view;
     const active = (mode === "all" && target === "all")
-      || (mode.startsWith("artist") && target === "artists")
-      || (mode.startsWith("album") && target === "albums");
+      || (mode.startsWith("artist") && target === "artists");
     btn.classList.toggle("active", active);
     btn.setAttribute("aria-selected", active ? "true" : "false");
   });
 
   if (mode === "artistTracks") backToList.onclick = () => setView("artists");
-  if (mode === "albumTracks") backToList.onclick = () => setView("albums");
 
-  const inSub = mode === "artistTracks" || mode === "albumTracks";
+  const inSub = mode === "artistTracks";
   backToList.disabled = !inSub;
   backToList.setAttribute("aria-disabled", inSub ? "false" : "true");
 
@@ -288,13 +294,19 @@ function renderPlaylist() {
     return (
       normalizeText(t.title).includes(q) ||
       normalizeText(t.artist).includes(q) ||
-      normalizeText(t.album).includes(q) ||
       normalizeText(fileName).includes(q) ||
       normalizeText(fileBase).includes(q)
     );
   };
 
   const filteredTracks = tracks.filter(matchesTrack);
+  const trackListForMode = () => {
+    if (viewMode === "artistTracks") {
+      return filteredTracks.filter(t => (t.artist || "Desconhecido") === viewFilter);
+    }
+    if (viewMode === "all") return filteredTracks;
+    return tracks;
+  };
 
   const byArtist = () => {
     const map = new Map();
@@ -305,21 +317,12 @@ function renderPlaylist() {
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   };
 
-  const byAlbum = () => {
-    const map = new Map();
-    filteredTracks.forEach((t) => {
-      const key = t.album || "Desconhecido";
-      map.set(key, (map.get(key) || 0) + 1);
-    });
-    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  };
-
   const renderTracks = (list) => {
     list.forEach((t) => {
       const div = document.createElement("div");
       div.className = "track";
       div.dataset.index = String(t.index);
-      div.innerHTML = `<span>${escapeHtml(t.title)}</span><span class="sub">${escapeHtml(t.artist || "Desconhecido")} - ${escapeHtml(t.album || "Desconhecido")}</span>`;
+      div.innerHTML = `<span>${escapeHtml(t.title)}</span><span class="sub">${escapeHtml(t.artist || "Desconhecido")}</span>`;
       div.onclick = () => { idx = t.index; playIndex(true); };
       playlist.appendChild(div);
     });
@@ -343,31 +346,37 @@ function renderPlaylist() {
       div.onclick = () => setView("artistTracks", name);
       playlist.appendChild(div);
     });
-  } else if (viewMode === "albums") {
-    const items = byAlbum();
-    setCount(items.length);
-    items.forEach(([name, total]) => {
-      const div = document.createElement("div");
-      div.className = "track group";
-      div.innerHTML = `<span>${escapeHtml(name)}</span><span class="sub">${total} musica(s)</span>`;
-      div.onclick = () => setView("albumTracks", name);
-      playlist.appendChild(div);
-    });
   } else if (viewMode === "artistTracks") {
     plistSub.hidden = false;
     subTitle.textContent = `Artista: ${viewFilter || "Desconhecido"}`;
-    const list = filteredTracks.filter(t => (t.artist || "Desconhecido") === viewFilter);
-    setCount(list.length);
-    renderTracks(list);
-  } else if (viewMode === "albumTracks") {
-    plistSub.hidden = false;
-    subTitle.textContent = `Album: ${viewFilter || "Desconhecido"}`;
-    const list = filteredTracks.filter(t => (t.album || "Desconhecido") === viewFilter);
+    const list = trackListForMode();
     setCount(list.length);
     renderTracks(list);
   }
 
   updateActive();
+}
+
+function getPlaybackList() {
+  const q = searchQuery;
+  const matchesTrack = (t) => {
+    if (!q) return true;
+    const fileName = t.file ? t.file.name : "";
+    const fileBase = fileName.replace(/\.[^/.]+$/, "");
+    return (
+      normalizeText(t.title).includes(q) ||
+      normalizeText(t.artist).includes(q) ||
+      normalizeText(fileName).includes(q) ||
+      normalizeText(fileBase).includes(q)
+    );
+  };
+  const filteredTracks = tracks.filter(matchesTrack);
+
+  if (viewMode === "artistTracks") {
+    return filteredTracks.filter(t => (t.artist || "Desconhecido") === viewFilter);
+  }
+  if (viewMode === "all") return filteredTracks;
+  return tracks;
 }
 
 function updateActive() {
@@ -440,13 +449,19 @@ playBtn.onclick = () => {
 
 document.getElementById("next").onclick = () => {
   if (!files.length) return;
-  idx = (idx + 1) % files.length;
+  const list = getPlaybackList();
+  if (!list.length) return;
+  const pos = Math.max(0, list.findIndex(t => t.index === idx));
+  idx = list[(pos + 1) % list.length].index;
   playIndex(true);
 };
 
 document.getElementById("prev").onclick = () => {
   if (!files.length) return;
-  idx = (idx - 1 + files.length) % files.length;
+  const list = getPlaybackList();
+  if (!list.length) return;
+  const pos = Math.max(0, list.findIndex(t => t.index === idx));
+  idx = list[(pos - 1 + list.length) % list.length].index;
   playIndex(true);
 };
 
@@ -458,7 +473,7 @@ folder.onchange = (e) => {
     index: i,
     title: baseTitleFromFile(f),
     artist: "",
-    album: ""
+    album: getFolderAlbum(f)
   }));
   setView("all");
   statusEl.textContent = files.length ? "Carregando metadados..." : "Nenhum áudio encontrado.";
@@ -474,7 +489,7 @@ folder.onchange = (e) => {
       if (!tracks[i]) return;
       tracks[i].title = tag.title || tracks[i].title;
       tracks[i].artist = tag.artist || "";
-      tracks[i].album = tag.album || "";
+      tracks[i].album = tag.album || tracks[i].album;
     });
     renderPlaylist();
     statusEl.textContent = "Pronto para tocar.";
@@ -483,7 +498,10 @@ folder.onchange = (e) => {
 
 audio.onended = () => {
   if (!files.length) return;
-  idx = (idx + 1) % files.length;
+  const list = getPlaybackList();
+  if (!list.length) return;
+  const pos = Math.max(0, list.findIndex(t => t.index === idx));
+  idx = list[(pos + 1) % list.length].index;
   playIndex(true);
 };
 

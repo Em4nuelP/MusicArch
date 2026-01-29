@@ -31,11 +31,12 @@ const playBtn = document.getElementById("play");
 const statusEl = document.getElementById("status");
 const tCur = document.getElementById("tCur");
 const tDur = document.getElementById("tDur");
-const navButtons = Array.from(document.querySelectorAll(".plistNav .seg"));
+const navButtons = Array.from(document.querySelectorAll(".plistNav .seg:not(.radioToggle)"));
 const plistSub = document.getElementById("plistSub");
 const backToList = document.getElementById("backToList");
 const subTitle = document.getElementById("subTitle");
 const searchInput = document.getElementById("searchInput");
+const radioModeBtn = document.getElementById("radioModeBtn");
 
 const colorPicker = document.getElementById("colorPicker");
 const vizSelect = document.getElementById("vizSelect");
@@ -43,6 +44,11 @@ const vizModeLabel = document.getElementById("vizMode");
 
 const volume = document.getElementById("volume");
 const muteBtn = document.getElementById("mute");
+const radioExit = document.getElementById("radioExit");
+const radioList = document.getElementById("radioList");
+const radioCard = document.getElementById("radioCard");
+const radioFrame = document.getElementById("radioFrame");
+const radioPlayer = document.getElementById("radioPlayer");
 
 const selectFolderBtn = document.getElementById("selectFolder");
 
@@ -59,6 +65,74 @@ selectFolderBtn.onclick = async () => {
     folder.click();
   }
 };
+
+const RADIOS = [
+  { id: "bossa", title: "Lofi Bossa", url: "https://www.youtube.com/embed/SnX4knSvyko?autoplay=1&rel=0" },
+  { id: "game", title: "Lofi Game", url: "https://www.youtube.com/embed/4xDzrJKXOOY?autoplay=1&rel=0" },
+  { id: "girl", title: "Lofi Girl", url: "https://www.youtube.com/embed/jfKfPfyJRdk?autoplay=1&rel=0" },
+  { id: "jaz", title: "Lofi Jaz", url: "https://www.youtube.com/embed/A8jDx9TLMQc?autoplay=1&rel=0" },
+  { id: "sad", title: "Lofi Sad", url: "https://www.youtube.com/embed/P6Segk8cr-c?autoplay=1&rel=0" },
+  { id: "asian", title: "Lofi Asian", url: "https://www.youtube.com/embed/Na0w3Mz46GA?autoplay=1&rel=0" }
+];
+
+let radioOn = false;
+let activeRadioId = "";
+
+function renderRadioList() {
+  radioList.innerHTML = "";
+  RADIOS.forEach((r) => {
+    const btn = document.createElement("button");
+    btn.className = "radioItem";
+    btn.dataset.radioId = r.id;
+    btn.innerHTML = `<span>${escapeHtml(r.title)}</span><span class="radioBadge">YouTube</span>`;
+    btn.onclick = () => setRadio(r.id);
+    radioList.appendChild(btn);
+  });
+}
+
+function updateRadioActive() {
+  document.querySelectorAll(".radioItem").forEach((el) => {
+    el.classList.toggle("active", el.dataset.radioId === activeRadioId);
+  });
+  radioExit.hidden = !radioOn;
+}
+
+function setRadioMode(on) {
+  radioOn = on;
+  document.body.classList.toggle("radioMode", on);
+  radioModeBtn.classList.toggle("active", on);
+  radioPlayer.hidden = !on;
+  radioCard.hidden = !on;
+  if (!on) {
+    radioFrame.src = "";
+    activeRadioId = "";
+    statusEl.textContent = "Pronto.";
+  } else {
+    statusEl.textContent = "Escolha uma r?dio.";
+  }
+  if (on && !audio.paused) {
+    audio.pause();
+    updatePlayIcon(false);
+  }
+  resizeCanvas();
+  updateRadioActive();
+}
+
+function setRadio(id) {
+  const r = RADIOS.find(x => x.id === id);
+  if (!r) return;
+  activeRadioId = id;
+  setRadioMode(true);
+  radioFrame.src = r.url;
+  if (!audio.paused) audio.pause();
+  updatePlayIcon(false);
+  statusEl.textContent = `Radio: ${r.title}`;
+}
+
+radioExit.onclick = () => setRadioMode(false);
+radioModeBtn.onclick = () => setRadioMode(!radioOn);
+renderRadioList();
+radioCard.hidden = true;
 
 
 /****************************************************
@@ -552,6 +626,7 @@ function playIndex(userGesture = false) {
 }
 
 playBtn.onclick = () => {
+  if (radioOn) return;
   if (!files.length) return;
   resumeAudioCtx();
 
@@ -570,6 +645,7 @@ playBtn.onclick = () => {
 };
 
 document.getElementById("next").onclick = () => {
+  if (radioOn) return;
   if (!files.length) return;
   const list = getPlaybackList();
   if (!list.length) return;
@@ -579,6 +655,7 @@ document.getElementById("next").onclick = () => {
 };
 
 document.getElementById("prev").onclick = () => {
+  if (radioOn) return;
   if (!files.length) return;
   const list = getPlaybackList();
   if (!list.length) return;
@@ -620,6 +697,7 @@ folder.onchange = (e) => {
 };
 
 audio.onended = () => {
+  if (radioOn) return;
   if (!files.length) return;
   const list = getPlaybackList();
   if (!list.length) return;
@@ -642,6 +720,7 @@ audio.ontimeupdate = () => {
 };
 
 progress.oninput = () => {
+  if (radioOn) return;
   if (!isFinite(audio.duration)) return;
   audio.currentTime = (progress.value / 100) * audio.duration;
 };

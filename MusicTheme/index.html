@@ -66,6 +66,9 @@
         </div>
 
         <canvas id="visualizer" title="Clique para alternar Bars/Line"></canvas>
+        <div class="radioPlayer" id="radioPlayer" hidden>
+          <iframe id="radioFrame" title="Radio stream" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+        </div>
 
         <!-- TEMPO EM CIMA DO PROGRESSO (premium) -->
         <div class="progressTime">
@@ -100,7 +103,7 @@
         </div>
 
         <div class="subhint" id="status">Pronto.</div>
-        <div class="subhint subtle">Atalhos: Espaço play/pause • ←/→ troca • M mute</div>
+        <div class="subhint subtle" id="shortcuts">Atalhos: Espaço play/pause • ←/→ troca • M mute</div>
       </section>
 
       <!-- RIGHT -->
@@ -109,9 +112,17 @@
           <span>Playlist</span>
           <span class="count" id="count">0</span>
         </div>
+        <div class="radioCard" id="radioCard">
+          <div class="radioHead">
+            <span>Radios</span>
+            <button class="btn ghost" id="radioExit" hidden>Fechar Rádio</button>
+          </div>
+          <div class="radioList" id="radioList"></div>
+        </div>
         <div class="plistNav" role="tablist" aria-label="Filtros de playlist">
           <button class="seg active" data-view="all" role="tab" aria-selected="true">Todas</button>
           <button class="seg" data-view="artists" role="tab" aria-selected="false">Artistas</button>
+          <button class="seg radioToggle" id="radioModeBtn" type="button">Modo Lofi</button>
         </div>
         <div class="plistSearch">
           <i data-lucide="search"></i>

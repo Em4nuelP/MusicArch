@@ -44,7 +44,21 @@ const vizModeLabel = document.getElementById("vizMode");
 const volume = document.getElementById("volume");
 const muteBtn = document.getElementById("mute");
 
-document.getElementById("selectFolder").onclick = () => folder.click();
+const selectFolderBtn = document.getElementById("selectFolder");
+
+selectFolderBtn.onclick = async () => {
+  if (window.showDirectoryPicker) {
+    try {
+      const handle = await window.showDirectoryPicker();
+      await saveDirHandle(handle);
+      await loadFromHandle(handle);
+    } catch {
+      // usuário cancelou
+    }
+  } else {
+    folder.click();
+  }
+};
 
 
 /****************************************************
@@ -105,6 +119,17 @@ function baseTitleFromFile(file) {
   return file.name.replace(/\.[^/.]+$/, "");
 }
 
+function getRelPath(file) {
+  return file.webkitRelativePath || file.name || "";
+}
+
+function getFolderNameFromPath(relPath) {
+  if (!relPath) return "";
+  const parts = relPath.split("/").filter(Boolean);
+  if (parts.length < 2) return "";
+  return parts[parts.length - 2];
+}
+
 function readTags(file) {
   return new Promise((resolve) => {
     if (!window.jsmediatags) {
@@ -136,11 +161,100 @@ function normalizeText(s) {
 }
 
 function getFolderAlbum(file) {
-  const rel = file.webkitRelativePath || "";
-  if (!rel) return "";
-  const parts = rel.split("/").filter(Boolean);
-  if (parts.length < 2) return "";
-  return parts[parts.length - 2];
+  return getFolderNameFromPath(getRelPath(file));
+}
+
+// ========= File System Access API (persistência do diretório) =========
+const DB_NAME = "musicTheme";
+const DB_STORE = "handles";
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveDirHandle(handle) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).put(handle, "dir");
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function loadDirHandle() {
+  const db = await openDB();
+  return new Promise((resolve) => {
+    const tx = db.transaction(DB_STORE, "readonly");
+    const req = tx.objectStore(DB_STORE).get("dir");
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => resolve(null);
+  });
+}
+
+async function ensurePermission(handle) {
+  if (!handle) return false;
+  const opts = { mode: "read" };
+  if ((await handle.queryPermission(opts)) === "granted") return true;
+  return (await handle.requestPermission(opts)) === "granted";
+}
+
+async function readFilesFromHandle(handle, relPrefix = "") {
+  const out = [];
+  for await (const [name, entry] of handle.entries()) {
+    if (entry.kind === "file") {
+      const file = await entry.getFile();
+      out.push({ file, relPath: `${relPrefix}${name}` });
+    } else if (entry.kind === "directory") {
+      const nested = await readFilesFromHandle(entry, `${relPrefix}${name}/`);
+      out.push(...nested);
+    }
+  }
+  return out;
+}
+
+async function loadFromHandle(handle) {
+  const ok = await ensurePermission(handle);
+  if (!ok) return;
+
+  const entries = await readFilesFromHandle(handle);
+  const audioEntries = entries.filter(e => e.file.type.startsWith("audio/"));
+  files = audioEntries.map(e => e.file);
+  idx = 0;
+
+  tracks = audioEntries.map((e, i) => ({
+    file: e.file,
+    index: i,
+    title: baseTitleFromFile(e.file),
+    artist: "",
+    album: getFolderNameFromPath(e.relPath),
+    relPath: e.relPath
+  }));
+
+  setView("all");
+  statusEl.textContent = files.length ? "Carregando metadados..." : "Nenhum áudio encontrado.";
+  updatePlayIcon(false);
+  if (files.length) playIndex(false);
+
+  if (!files.length) return;
+  Promise.all(tracks.map((t) => readTags(t.file))).then((tags) => {
+    tags.forEach((tag, i) => {
+      if (!tracks[i]) return;
+      tracks[i].title = tag.title || tracks[i].title;
+      tracks[i].artist = tag.artist || "";
+      tracks[i].album = tag.album || tracks[i].album;
+    });
+    renderPlaylist();
+    statusEl.textContent = "Pronto para tocar.";
+  });
 }
 
 
@@ -273,6 +387,14 @@ function setView(mode, filter = null) {
 
   renderPlaylist();
 }
+
+// tenta reabrir a pasta salva automaticamente
+(async () => {
+  if (!window.showDirectoryPicker) return;
+  const handle = await loadDirHandle();
+  if (!handle) return;
+  await loadFromHandle(handle);
+})();
 
 navButtons.forEach((btn) => {
   btn.onclick = () => setView(btn.dataset.view);
@@ -473,7 +595,8 @@ folder.onchange = (e) => {
     index: i,
     title: baseTitleFromFile(f),
     artist: "",
-    album: getFolderAlbum(f)
+    album: getFolderAlbum(f),
+    relPath: getRelPath(f)
   }));
   setView("all");
   statusEl.textContent = files.length ? "Carregando metadados..." : "Nenhum áudio encontrado.";
